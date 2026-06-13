@@ -1,44 +1,37 @@
+import { Mastra } from '@mastra/core';
 
-import { Mastra } from '@mastra/core/mastra';
-import { PinoLogger } from '@mastra/loggers';
-import { LibSQLStore } from '@mastra/libsql';
-import { DuckDBStore } from "@mastra/duckdb";
-import { MastraCompositeStore } from '@mastra/core/storage';
-import { Observability, MastraStorageExporter, MastraPlatformExporter, SensitiveDataFilter } from '@mastra/observability';
-import { weatherWorkflow } from './workflows/weather-workflow';
-import { weatherAgent } from './agents/weather-agent';
-import { toolCallAppropriatenessScorer, completenessScorer, translationScorer } from './scorers/weather-scorer';
+// ── Agents ───────────────────────────────────────────────────
+import { projectManagerAgent } from './agents/project-manager-agent';
+import { jiraAgent } from './agents/jira-agent';
+import { figmaAgent } from './agents/figma-agent';
+import { scrumMasterAgent } from './agents/scrum-master-agent';
+import { devAgent } from './agents/dev-agent';
+import { devopsAgent } from './agents/devops-agent';
+import { qaAgent } from './agents/qa-agent';
+import { deployAgent } from './agents/deploy-agent';
+import { azureHealthAgent } from './agents/azure-health-agent';
+import { monitoringAgent, releaseNotesAgent, documentationAgent } from './agents/post-prod-agents';
+
+// ── Workflows ─────────────────────────────────────────────────
+import { sdlcWorkflow } from './workflows/sdlc-workflow';
 
 export const mastra = new Mastra({
-  workflows: { weatherWorkflow },
-  agents: { weatherAgent },
-  scorers: { toolCallAppropriatenessScorer, completenessScorer, translationScorer },
-  storage: new MastraCompositeStore({
-    id: 'composite-storage',
-    default: new LibSQLStore({
-      id: "mastra-storage",
-      url: "file:./mastra.db",
-    }),
-    domains: {
-      observability: await new DuckDBStore().getStore('observability'),
-    }
-  }),
-  logger: new PinoLogger({
-    name: 'Mastra',
-    level: 'info',
-  }),
-  observability: new Observability({
-    configs: {
-      default: {
-        serviceName: 'mastra',
-        exporters: [
-          new MastraStorageExporter(), // Persists observability events to Mastra Storage
-          new MastraPlatformExporter(), // Sends observability events to Mastra Platform (if MASTRA_PLATFORM_ACCESS_TOKEN is set)
-        ],
-        spanOutputProcessors: [
-          new SensitiveDataFilter(), // Redacts sensitive data like passwords, tokens, keys
-        ],
-      },
-    },
-  }),
+  agents: {
+    projectManagerAgent,   // 🎯 Master orchestrator
+    jiraAgent,             // 📋 Requirement intake
+    figmaAgent,            // 🎨 Design spec
+    scrumMasterAgent,      // 🏃 Sprint planning
+    devAgent,              // 💻 Full stack development
+    devopsAgent,           // 🏗️ CI/CD + infrastructure
+    qaAgent,               // 🧪 Full QA suite
+    deployAgent,           // 🚀 UAT + production deploy
+    azureHealthAgent,      // 💊 Azure health monitoring
+    monitoringAgent,       // 📊 Post-prod monitoring
+    releaseNotesAgent,     // 📋 Release notes
+    documentationAgent,    // 📚 Documentation
+  },
+
+  workflows: {
+    sdlcWorkflow,          // 🔄 Full 12-step SDLC workflow
+  },
 });

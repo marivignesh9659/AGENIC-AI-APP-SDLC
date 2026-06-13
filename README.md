@@ -1,30 +1,111 @@
-# AGENIC-AI-APP-SDLC
+🤖 SDLC Agentic AI — Mastra TypeScript
 
-Welcome to your new [Mastra](https://mastra.ai/) project! We're excited to see what you'll build.
+What This Does
 
-## Getting Started
+A complete AI-powered SDLC pipeline built with Mastra TypeScript.
+One requirement goes in → Full SDLC output comes out automatically.
 
-Start the development server:
+Architecture
 
-```shell
-npm run dev
-```
+Business Requirement
+        ↓
+Project Manager Agent (Supervisor Orchestrator)
+        ↓
+┌─────────────────────────────────────────────────┐
+│  Phase 1:  Jira Agent        (Requirement)       │
+│  Phase 2:  Figma Agent       (Design)            │
+│  Phase 3:  Scrum Master      (Sprint Planning)   │
+│  Phase 4:  DevOps Agent      (Infrastructure)    │
+│  Phase 5:  Dev Agent         (Code Generation)   │
+│  Phase 6:  QA Agent          (Full Testing)      │
+│  Phase 7:  Health Agent      (UAT health check)  │
+│  Phase 8:  Deploy Agent      (UAT Deployment)    │
+│  Phase 9:  Health Agent      (Prod health check) │
+│  Phase 10: Deploy Agent      (Production)        │
+│  Phase 11: Monitoring +      (parallel)          │
+│            Release Notes +                       │
+│            Documentation                         │
+│  Phase 12: Final Summary     (Dashboard)         │
+└─────────────────────────────────────────────────┘
 
-Open [http://localhost:4111](http://localhost:4111) in your browser to access [Mastra Studio](https://mastra.ai/docs/studio/overview). It provides an interactive UI for building and testing your agents, along with a REST API that exposes your Mastra application as a local service. This lets you start building without worrying about integration right away.
+Human Gates
 
-You can start editing files inside the `src/mastra` directory. The development server will automatically reload whenever you make changes.
+GateWhoWhen1Product OwnerAfter requirement2Tech LeadAfter sprint planning3Tech LeadCode review sign-off4QA LeadQA sign-off5Project ManagerUAT approval6PM + DevOpsProduction go-live
 
-## Learn more
+Tools Used
 
-To learn more about Mastra, visit our [documentation](https://mastra.ai/docs/). Your bootstrapped project includes example code for [agents](https://mastra.ai/docs/agents/overview), [tools](https://mastra.ai/docs/agents/using-tools), [workflows](https://mastra.ai/docs/workflows/overview), [scorers](https://mastra.ai/docs/evals/overview), and [observability](https://mastra.ai/docs/observability/overview).
+ToolPurposejira-create-ticketCreate Jira ticketsjira-update-ticketUpdate ticket statusfigma-create-specRegister Figma designfigma-get-component-libraryFetch existing componentsgithub-create-branchCreate feature branchgithub-create-prCreate pull requestgithub-security-scanRun CodeQL scanazure-trigger-pipelineStart CI/CD pipelineazure-slot-swapZero-downtime deployazure-keyvault-setStore secretsazure-deploy-bicepProvision infrastructureazure-health-checkCheck app healthazure-app-insightsFetch metricsazure-raise-blockerRaise blocker ticketplaywright-run-testsE2E testsxunit-run-tests.NET unit testsowasp-security-scanSecurity scanaccessibility-checkWCAG 2.1 checkchaos-testingResilience testingsend-notificationTeams/Email notify
 
-If you're new to AI agents, check out our [course](https://mastra.ai/learn) and [YouTube videos](https://youtube.com/@mastra-ai). You can also join our [Discord](https://discord.gg/BTYqqHKUrf) community to get help and share your projects.
+Setup
 
-## Deploy to the Mastra platform
+1. Install dependencies
 
-The [Mastra platform](https://projects.mastra.ai) provides two products for deploying and managing AI applications built with the Mastra framework:
+bashnpm install
 
-- **Studio**: A hosted visual environment for testing agents, running workflows, and inspecting traces
-- **Server**: A production deployment target that runs your Mastra application as an API server
+2. Create .env file
 
-Learn more in the [Mastra platform documentation](https://mastra.ai/docs/mastra-platform/overview).
+bashcp .env.example .env
+
+Add your GROQ_API_KEY (free at console.groq.com)
+
+3. Start Mastra
+
+bashnpm run dev
+
+4. Open Mastra Studio
+
+http://localhost:4111
+
+How to Demo
+
+Option A — Project Manager Agent (Full SDLC)
+
+
+Open localhost:4111
+Click Agents → Project Manager
+Type:
+
+
+Build a User Login feature with Azure AD authentication.
+Users login with company email, get JWT token, redirect to dashboard.
+
+
+Watch all 12 phases execute automatically!
+
+
+Option B — SDLC Workflow
+
+
+Click Workflows → sdlc-workflow
+Enter requirement
+See each of 12 steps execute with results
+
+
+Option C — Individual Agents
+
+Test each agent independently for demos of specific phases.
+
+File Structure
+
+src/mastra/
+  agents/
+    project-manager-agent.ts  ← Master orchestrator
+    jira-agent.ts             ← Requirement intake
+    figma-agent.ts            ← Design spec
+    scrum-master-agent.ts     ← Sprint planning
+    dev-agent.ts              ← Code generation
+    devops-agent.ts           ← CI/CD + infrastructure
+    qa-agent.ts               ← Full test suite
+    deploy-agent.ts           ← UAT + production
+    azure-health-agent.ts     ← Health monitoring
+    post-prod-agents.ts       ← Monitoring, release, docs
+  tools/
+    jira-tool.ts              ← Jira create/update
+    figma-tool.ts             ← Figma API
+    github-tool.ts            ← GitHub branch/PR/scan
+    azure-devops-tool.ts      ← Pipeline/slot/bicep
+    azure-health-tool.ts      ← Health/insights/blocker
+    qa-tools.ts               ← All QA + notify tools
+  workflows/
+    sdlc-workflow.ts          ← 12-step main workflow
+  index.ts                    ← Mastra registration
