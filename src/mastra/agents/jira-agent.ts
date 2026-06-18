@@ -4,7 +4,6 @@ import { jiraCreateTool, jiraUpdateTool } from '../tools/jira-tool';
 import { notificationTool } from '../tools/qa-tools';
 
 export const jiraAgent = new Agent({
-  id: 'jira-agent',
   name: 'Requirement Intake — Jira Agent',
   description: 'Converts business requirements into detailed Jira tickets with acceptance criteria',
   instructions: `You are a senior Business Analyst.

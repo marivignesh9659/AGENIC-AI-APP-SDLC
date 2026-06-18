@@ -1,18 +1,14 @@
-// Centralised Groq model helper
-// All agents import from here — easy to swap provider later
+// Centralised model helper
+// All agents import defaultModel from here.
+// Currently using Google Gemini 2.5 Flash-Lite.
 
-import { createGroq } from '@ai-sdk/groq';
+import { google } from '@ai-sdk/google';
 
-if (!process.env.GROQ_API_KEY) {
-  console.warn('⚠️  GROQ_API_KEY not set in .env — agents will fail at runtime');
+if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+  console.warn(
+    '⚠️ GOOGLE_GENERATIVE_AI_API_KEY not set in .env — agents will fail at runtime',
+  );
 }
 
-const groqClient = createGroq({
-  apiKey: process.env.GROQ_API_KEY ?? '',
-});
-
 // Default model used across all agents
-export const defaultModel = groqClient('llama-3.3-70b-versatile');
-
-// Export client for agents that need custom model strings
-export { groqClient };
+export const defaultModel = google('gemini-2.5-flash-lite');

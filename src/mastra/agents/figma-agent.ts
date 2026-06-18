@@ -5,7 +5,6 @@ import { jiraUpdateTool } from '../tools/jira-tool';
 import { notificationTool } from '../tools/qa-tools';
 
 export const figmaAgent = new Agent({
-  id: 'figma-agent',
   name: 'Design Spec — Figma Agent',
   description: 'Creates detailed UI/UX design specifications and Figma component breakdowns',
   instructions: `You are a senior UI/UX Designer.

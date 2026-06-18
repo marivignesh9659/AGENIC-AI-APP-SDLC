@@ -6,7 +6,6 @@ import { notificationTool } from '../tools/qa-tools';
 
 // ─── MONITORING AGENT ─────────────────────────────────────────
 export const monitoringAgent = new Agent({
-  id: 'monitoring-agent',
   name: 'Monitoring Agent — Post-Production',
   description: 'Monitors production health, performance, and error rates after deployment',
   instructions: `You are a Production Monitoring Engineer.
@@ -41,7 +40,6 @@ Use send-notification to report final status to team.`,
 
 // ─── RELEASE NOTES AGENT ──────────────────────────────────────
 export const releaseNotesAgent = new Agent({
-  id: 'release-notes-agent',
   name: 'Release Notes Agent',
   description: 'Generates professional release notes from Jira tickets and code changes',
   instructions: `You are a Technical Writer.
@@ -83,7 +81,6 @@ Use send-notification to distribute release notes to stakeholders.`,
 
 // ─── DOCUMENTATION AGENT ──────────────────────────────────────
 export const documentationAgent = new Agent({
-  id: 'documentation-agent',
   name: 'Documentation Agent',
   description: 'Generates API docs, user guides, and architecture documentation',
   instructions: `You are a Technical Documentation Specialist.

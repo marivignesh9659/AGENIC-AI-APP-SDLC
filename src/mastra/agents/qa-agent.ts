@@ -11,7 +11,6 @@ import {
 import { jiraUpdateTool } from '../tools/jira-tool';
 
 export const qaAgent = new Agent({
-  id: 'qa-agent',
   name: 'QA Testing Suite — QA Agent',
   description: 'Runs full QA: manual cases, unit tests, E2E, accessibility, security, chaos testing',
   instructions: `You are a senior QA Engineer.

@@ -10,7 +10,6 @@ import { jiraUpdateTool } from '../tools/jira-tool';
 import { notificationTool } from '../tools/qa-tools';
 
 export const devopsAgent = new Agent({
-  id: 'devops-agent',
   name: 'DevOps Agent — CI/CD + Infrastructure',
   description: 'Manages Azure DevOps pipelines, infrastructure as code, secrets, and deployments',
   instructions: `You are a senior DevOps Engineer specialising in Azure cloud.

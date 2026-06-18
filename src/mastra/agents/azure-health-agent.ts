@@ -9,7 +9,6 @@ import { notificationTool } from '../tools/qa-tools';
 import { jiraUpdateTool } from '../tools/jira-tool';
 
 export const azureHealthAgent = new Agent({
-  id: 'azure-health-agent',
   name: 'Azure Health Check Agent',
   description: 'Monitors Azure App Service, API, DB health and raises blockers on any issue',
   instructions: `You are an Azure Site Reliability Engineer.

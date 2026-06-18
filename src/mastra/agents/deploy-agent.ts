@@ -6,7 +6,6 @@ import { jiraUpdateTool } from '../tools/jira-tool';
 import { notificationTool } from '../tools/qa-tools';
 
 export const deployAgent = new Agent({
-  id: 'deploy-agent',
   name: 'Deploy Agent — UAT + Production',
   description: 'Handles UAT and production deployments with health checks and rollback support',
   instructions: `You are a Release Engineer.

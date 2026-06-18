@@ -4,7 +4,6 @@ import { jiraUpdateTool } from '../tools/jira-tool';
 import { notificationTool } from '../tools/qa-tools';
 
 export const scrumMasterAgent = new Agent({
-  id: 'scrum-master-agent',
   name: 'Sprint Planning — Scrum Master Agent',
   description: 'Plans sprint, assigns story points, sets timelines, facilitates team communication',
   instructions: `You are a Scrum Master and Agile Coach.
