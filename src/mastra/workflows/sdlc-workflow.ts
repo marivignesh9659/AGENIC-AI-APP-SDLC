@@ -29,12 +29,32 @@ import {
   releaseNotesAgent,
   documentationAgent,
 } from '../agents/post-prod-agents';
+import {
+  buildGuardrailReport,
+  runRequirementGuardrails,
+} from '../guardrails/guardrails';
 
+import {
+  appendSdlcMemory,
+  getRecentSdlcMemorySummary,
+} from '../memory/sdlc-memory';
 // ─────────────────────────────────────────────────────────────
 // SHARED HELPERS / SCHEMAS
 // ─────────────────────────────────────────────────────────────
 const requirementInput = z.object({
   requirement: z.string(),
+  demoFailureMode: z
+    .enum([
+      'none',
+      'bad_requirement',
+      'integration_mismatch',
+      'qa_fail',
+      'health_fail',
+      'prod_issue',
+    ])
+    .optional()
+    .default('none'),
+  userId: z.string().optional().default('demo-user'),
 });
 
 const isFailureText = (value: string) => {
@@ -54,40 +74,115 @@ const getSafePreview = (value: string, length = 1200) =>
   const asString = (value: unknown): string => {
     return typeof value === 'string' ? value : '';
   };
+
+  const step0GuardrailsAndMemory = createStep({
+    id: 'step-0-guardrails-and-memory',
+    description: 'Runs SDLC guardrails and loads previous run memory',
+    inputSchema: requirementInput,
+    outputSchema: z.object({
+      requirement: z.string(),
+      demoFailureMode: z.string(),
+      userId: z.string(),
+      guardrailReport: z.string(),
+      guardrailBlocked: z.boolean(),
+      memorySummary: z.string(),
+    }),
+    execute: async ({ inputData }) => {
+      console.log('\nPHASE 0: Guardrails + Memory...');
+  
+      const demoFailureMode = inputData.demoFailureMode ?? 'none';
+      const userId = inputData.userId ?? 'demo-user';
+  
+      const guardrailResult = runRequirementGuardrails(inputData.requirement);
+      const guardrailReport = buildGuardrailReport(guardrailResult);
+      const memorySummary = await getRecentSdlcMemorySummary(userId);
+  
+      console.log(
+        guardrailResult.status === 'PASS'
+          ? '✅ Guardrails passed'
+          : '🚨 Guardrails blocked request',
+      );
+  
+      return {
+        requirement: inputData.requirement,
+        demoFailureMode,
+        userId,
+        guardrailReport,
+        guardrailBlocked: guardrailResult.status === 'BLOCKED',
+        memorySummary,
+      };
+    },
+  });
 // ─────────────────────────────────────────────────────────────
 // STEP 1: REQUIREMENT QUALITY CHECK
 // ─────────────────────────────────────────────────────────────
 const step1RequirementQuality = createStep({
   id: 'step-1-requirement-quality',
   description: 'Requirement Analyzer checks clarity, assumptions, acceptance criteria, and risk before Jira creation',
-  inputSchema: requirementInput,
+  inputSchema: z.object({
+    requirement: z.string(),
+    demoFailureMode: z.string(),
+    userId: z.string(),
+    guardrailReport: z.string(),
+    guardrailBlocked: z.boolean(),
+    memorySummary: z.string(),
+  }),
   outputSchema: z.object({
     requirement: z.string(),
+    demoFailureMode: z.string(),
+    userId: z.string(),
+    guardrailReport: z.string(),
+    guardrailBlocked: z.boolean(),
+    memorySummary: z.string(),
     requirementQualityReport: z.string(),
     requirementRiskDetected: z.boolean(),
   }),
   execute: async ({ inputData }) => {
     console.log('\nPHASE 1: Requirement Quality Check...');
-
+  
+    if (inputData.guardrailBlocked) {
+      return {
+        ...inputData,
+        requirementQualityReport: `
+  STATUS: FAIL
+  
+  # REQUIREMENT QUALITY REPORT
+  
+  The request was blocked by pre-SDLC guardrails.
+  
+  ${inputData.guardrailReport}
+  `,
+        requirementRiskDetected: true,
+      };
+    }
+  
     const res = await requirementAnalyzerAgent.generate([
       {
         role: 'user',
         content: `Analyze this business requirement before SDLC starts:\n\n${inputData.requirement}`,
       },
     ]);
-
+  
+    const requirementQualityReport = res.text;
+  
     const requirementRiskDetected =
-      res.text.toLowerCase().includes('needs_clarification') ||
-      res.text.toLowerCase().includes('risk level\n\nhigh') ||
-      res.text.toLowerCase().includes('risk level: high');
-
-    console.log(requirementRiskDetected ? '⚠️ Requirement risk detected' : '✅ Requirement quality check complete');
-
+      requirementQualityReport.toLowerCase().includes('needs_clarification') ||
+      requirementQualityReport.toLowerCase().includes('risk level\n\nhigh') ||
+      requirementQualityReport.toLowerCase().includes('risk level: high') ||
+      requirementQualityReport.toLowerCase().includes('status: fail');
+  
+    console.log(
+      requirementRiskDetected
+        ? '⚠️ Requirement risk detected'
+        : '✅ Requirement quality check complete',
+    );
+  
     return {
-      requirement: inputData.requirement,
-      requirementQualityReport: res.text,
+      ...inputData,
+      requirementQualityReport,
       requirementRiskDetected,
     };
+  
   },
 });
 
@@ -99,11 +194,13 @@ const step2RequirementDecision = createStep({
   description: 'Creates blocker report when requirement is weak, otherwise proceeds with assumptions for demo flow',
   inputSchema: z.object({
     requirement: z.string(),
+    demoFailureMode: z.string(),
     requirementQualityReport: z.string(),
     requirementRiskDetected: z.boolean(),
   }),
   outputSchema: z.object({
     requirement: z.string(),
+    demoFailureMode: z.string(),
     requirementQualityReport: z.string(),
     requirementRiskDetected: z.boolean(),
     requirementBlockerReport: z.string(),
@@ -145,12 +242,14 @@ const step3JiraIntake = createStep({
   description: 'Jira Agent converts analyzed requirement into a detailed Jira ticket',
   inputSchema: z.object({
     requirement: z.string(),
+    demoFailureMode: z.string(),
     requirementQualityReport: z.string(),
     requirementBlockerReport: z.string(),
     proceedWithAssumptions: z.boolean(),
   }),
   outputSchema: z.object({
     requirement: z.string(),
+    demoFailureMode: z.string(),
     requirementQualityReport: z.string(),
     requirementBlockerReport: z.string(),
     jiraTicket: z.string(),
@@ -169,6 +268,7 @@ const step3JiraIntake = createStep({
 
     return {
       requirement: inputData.requirement,
+      demoFailureMode: inputData.demoFailureMode,
       requirementQualityReport: inputData.requirementQualityReport,
       requirementBlockerReport: inputData.requirementBlockerReport,
       jiraTicket: res.text,
@@ -842,7 +942,12 @@ const step14Summary = createStep({
     .object({
       requirement: z.string(),
       requirementQualityReport: z.string(),
+      demoFailureMode: z.string(),
       requirementBlockerReport: z.string(),
+      userId: z.string(),
+guardrailReport: z.string(),
+guardrailBlocked: z.boolean(),
+memorySummary: z.string(),
       jiraTicket: z.string(),
       apiContract: z.string(),
       designSpec: z.string(),
@@ -875,84 +980,113 @@ const step14Summary = createStep({
   }),
   execute: async ({ inputData }) => {
     console.log('\nGenerating Command Center summary...');
-
+  
     const productionLive = !inputData.prodBlocked;
-
+  
     const blockerCount = [
       inputData.developmentBlocked,
       inputData.postDevBlocked,
       inputData.qaBlocked,
       inputData.uatBlocked,
       inputData.prodBlocked,
+      inputData.guardrailBlocked,
     ].filter(Boolean).length;
-
+  
+    const overallScoreMatch = String(inputData.sdlcScoreReport ?? '').match(
+      /Overall SDLC Confidence Score\s*\n(\d+)/i,
+    );
+  
+    const overallScore = overallScoreMatch
+      ? Number(overallScoreMatch[1])
+      : undefined;
+  
+    await appendSdlcMemory({
+      runId: `run-${Date.now()}`,
+      userId: inputData.userId ?? 'demo-user',
+      requirement: inputData.requirement,
+      demoFailureMode: inputData.demoFailureMode ?? 'none',
+      status: productionLive ? 'PRODUCTION LIVE' : 'BLOCKED BEFORE PRODUCTION',
+      blockerCount,
+      overallScore,
+      createdAtUtc: new Date().toISOString(),
+    });
+  
     const summary = `
-# SDLC COMMAND CENTER — V2 LIFECYCLE COMPLETE
-
-## Feature
-${inputData.requirement}
-
-## Overall Status
-${productionLive ? '✅ PRODUCTION LIVE' : '🚨 BLOCKED BEFORE PRODUCTION'}
-
-## Blockers
-Active blocker count: ${blockerCount}
-
-## Lifecycle Status
-| Phase | Agent | Status |
-|---|---|---|
-| Requirement Quality | Requirement Analyzer | ✅ Done |
-| Jira Intake | Jira Agent | ✅ Done |
-| API Contract | API Contract Agent | ✅ Done |
-| UI/UX Design | Figma Agent | ✅ Done |
-| Sprint Planning | Scrum Master Agent | ✅ Done |
-| Infrastructure | DevOps Agent | ✅ Done |
-| Database | Database Agent | ${inputData.developmentBlocked ? '⚠️ Check Required' : '✅ Done'} |
-| Backend | Backend Agent | ${inputData.developmentBlocked ? '⚠️ Check Required' : '✅ Done'} |
-| Frontend | Frontend Agent | ${inputData.developmentBlocked ? '⚠️ Check Required' : '✅ Done'} |
-| Integration Validation | Integration Validator | ${inputData.developmentBlocked ? '🚨 Failed' : '✅ Passed'} |
-| Post-dev Quality | QA Agent | ${inputData.postDevBlocked ? '🚨 Failed' : '✅ Passed'} |
-| QA Testing | QA Agent | ${inputData.qaBlocked ? '🚨 Failed' : '✅ Passed'} |
-| UAT Health + Deploy | Azure Health + Deploy Agent | ${inputData.uatBlocked ? '🚨 Blocked' : '✅ Done'} |
-| Production Health + Deploy | Azure Health + Deploy Agent | ${inputData.prodBlocked ? '🚨 Blocked' : '✅ Done'} |
-| Monitoring | Monitoring Agent | ${productionLive ? '✅ Done' : '⏭️ Skipped'} |
-| Release Notes | Release Notes Agent | ✅ Done |
-| Documentation | Documentation Agent | ✅ Done |
-
-## SDLC Scoring
-${inputData.sdlcScoreReport ?? 'Scoring report not available.'}
-
-## Human Approval Gates
-| Gate | Approver | Demo Status |
-|---|---|---|
-| Gate 1 | Product Owner | Simulated approval after requirement quality |
-| Gate 2 | Tech Lead | Simulated approval after API contract + sprint plan |
-| Gate 3 | Tech Lead | Simulated approval after post-dev quality |
-| Gate 4 | QA Lead | Simulated approval after QA testing |
-| Gate 5 | PM / Business | Simulated approval after UAT |
-| Gate 6 | PM + DevOps | Simulated approval for production go-live |
-
-## Key Artifacts
-- Requirement Quality Report: created
-- Jira Ticket: created
-- API Contract: created
-- Design Spec: created
-- Sprint Plan: created
-- Infrastructure Plan: created
-- DB / Backend / Frontend Artifacts: created separately
-- Integration Validation Report: created
-- QA Report: created
-- SDLC Scoring Report: created
-- Release Notes: created
-- Documentation: created
-
-## Production URL
-${productionLive ? 'https://your-app.azurewebsites.net' : 'Not available because production deployment was blocked.'}
-
-## Architecture Improvement
-This V2 workflow avoids the God Agent problem. Development is separated into Database Agent, Backend Agent, Frontend Agent, and Integration Validator Agent. The Dev Agent acts as an orchestrator instead of generating everything directly.
-`;
-
+  # SDLC COMMAND CENTER — V2 LIFECYCLE COMPLETE
+  
+  ## Guardrails
+  ${inputData.guardrailReport ?? 'Guardrail report not available.'}
+  
+  ## Memory
+  ${inputData.memorySummary ?? 'Memory summary not available.'}
+  
+  ## Feature
+  ${inputData.requirement}
+  
+  ## Overall Status
+  ${productionLive ? '✅ PRODUCTION LIVE' : '🚨 BLOCKED BEFORE PRODUCTION'}
+  
+  ## Blockers
+  Active blocker count: ${blockerCount}
+  
+  ## Lifecycle Status
+  | Phase | Agent | Status |
+  |---|---|---|
+  | Guardrails + Memory | Local Guardrail + Memory | ${inputData.guardrailBlocked ? '🚨 Blocked' : '✅ Passed'} |
+  | Requirement Quality | Requirement Analyzer | ✅ Done |
+  | Jira Intake | Jira Agent | ✅ Done |
+  | API Contract | API Contract Agent | ✅ Done |
+  | UI/UX Design | Figma Agent | ✅ Done |
+  | Sprint Planning | Scrum Master Agent | ✅ Done |
+  | Infrastructure | DevOps Agent | ✅ Done |
+  | Database | Database Agent | ${inputData.developmentBlocked ? '⚠️ Check Required' : '✅ Done'} |
+  | Backend | Backend Agent | ${inputData.developmentBlocked ? '⚠️ Check Required' : '✅ Done'} |
+  | Frontend | Frontend Agent | ${inputData.developmentBlocked ? '⚠️ Check Required' : '✅ Done'} |
+  | Integration Validation | Integration Validator | ${inputData.developmentBlocked ? '🚨 Failed' : '✅ Passed'} |
+  | Post-dev Quality | QA Agent | ${inputData.postDevBlocked ? '🚨 Failed' : '✅ Passed'} |
+  | QA Testing | QA Agent | ${inputData.qaBlocked ? '🚨 Failed' : '✅ Passed'} |
+  | UAT Health + Deploy | Azure Health + Deploy Agent | ${inputData.uatBlocked ? '🚨 Blocked' : '✅ Done'} |
+  | Production Health + Deploy | Azure Health + Deploy Agent | ${inputData.prodBlocked ? '🚨 Blocked' : '✅ Done'} |
+  | Monitoring | Monitoring Agent | ${productionLive ? '✅ Done' : '⏭️ Skipped'} |
+  | Release Notes | Release Notes Agent | ✅ Done |
+  | Documentation | Documentation Agent | ✅ Done |
+  
+  ## SDLC Scoring
+  ${inputData.sdlcScoreReport ?? 'Scoring report not available.'}
+  
+  ## Human Approval Gates
+  | Gate | Approver | Demo Status |
+  |---|---|---|
+  | Gate 1 | Product Owner | Simulated approval after requirement quality |
+  | Gate 2 | Tech Lead | Simulated approval after API contract + sprint plan |
+  | Gate 3 | Tech Lead | Simulated approval after post-dev quality |
+  | Gate 4 | QA Lead | Simulated approval after QA testing |
+  | Gate 5 | PM / Business | Simulated approval after UAT |
+  | Gate 6 | PM + DevOps | Simulated approval for production go-live |
+  
+  ## Key Artifacts
+  - Guardrail Report: created
+  - Memory Summary: loaded
+  - Requirement Quality Report: created
+  - Jira Ticket: created
+  - API Contract: created
+  - Design Spec: created
+  - Sprint Plan: created
+  - Infrastructure Plan: created
+  - DB / Backend / Frontend Artifacts: created separately
+  - Integration Validation Report: created
+  - QA Report: created
+  - SDLC Scoring Report: created
+  - Release Notes: created
+  - Documentation: created
+  
+  ## Production URL
+  ${productionLive ? 'https://your-app.azurewebsites.net' : 'Not available because production deployment was blocked.'}
+  
+  ## Architecture Improvement
+  This V2 workflow avoids the God Agent problem. Development is separated into Database Agent, Backend Agent, Frontend Agent, and Integration Validator Agent. The Dev Agent acts as an orchestrator instead of generating everything directly.
+  `;
+  
     return {
       summary,
       releaseNotes: inputData.releaseNotes,
@@ -964,25 +1098,27 @@ This V2 workflow avoids the God Agent problem. Development is separated into Dat
 // ─────────────────────────────────────────────────────────────
 export const sdlcWorkflow = createWorkflow({
   id: 'sdlc-workflow',
-  description: 'Agentic SDLC V2: requirement quality, contract-first design, separated development agents, validation, blockers, deployment, and monitoring',
+  description:
+    'Agentic SDLC V2: guardrails, memory, requirement quality, contract-first design, separated development agents, validation, blockers, scoring, deployment, and monitoring',
   inputSchema: requirementInput,
   outputSchema: z.object({
     summary: z.string(),
     releaseNotes: z.string(),
   }),
 })
-.then(step1RequirementQuality as any)
-.then(step2RequirementDecision as any)
-.then(step3JiraIntake as any)
-.then(step4ContractAndDesign as any)
-.then(step5SprintPlanning as any)
-.then(step6DevOpsInfra as any)
-.then(step7Development as any)
-.then(step8PostDevQuality as any)
-.then(step9QATesting as any)
-.then(step10UATDeploy as any)
-.then(step11ProdDeploy as any)
-.then(step12PostProduction as any)
-.then(step13Scoring as any)
-.then(step14Summary as any)
+  .then(step0GuardrailsAndMemory as any)
+  .then(step1RequirementQuality as any)
+  .then(step2RequirementDecision as any)
+  .then(step3JiraIntake as any)
+  .then(step4ContractAndDesign as any)
+  .then(step5SprintPlanning as any)
+  .then(step6DevOpsInfra as any)
+  .then(step7Development as any)
+  .then(step8PostDevQuality as any)
+  .then(step9QATesting as any)
+  .then(step10UATDeploy as any)
+  .then(step11ProdDeploy as any)
+  .then(step12PostProduction as any)
+  .then(step13Scoring as any)
+  .then(step14Summary as any)
   .commit();
